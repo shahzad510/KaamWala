@@ -6,6 +6,4 @@ class Base(DeclarativeBase):
     pass
 
 
-# Import all models here so Alembic autogenerate can discover them.
-# Add new models to this import when created.
 

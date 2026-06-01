@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import enum
 import uuid
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     BigInteger,
@@ -13,9 +16,12 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+
+if TYPE_CHECKING:
+    from app.models.provider_listing import ProviderListing
 
 
 class UserType(str, enum.Enum):
@@ -28,21 +34,23 @@ class User(Base):
     __tablename__ = "users"
 
     __table_args__ = (
+        # Named unique index — easier to reference in Alembic migrations.
+        # Column-level unique=True is intentionally omitted to avoid a duplicate index.
         Index("ix_users_phone", "phone", unique=True),
         Index("ix_users_created_at", "created_at"),
     )
 
+    # PK index is created automatically by PostgreSQL; index=True would duplicate it.
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
-        index=True,
     )
 
+    # unique=True omitted — the named index in __table_args__ covers this.
     phone: Mapped[str] = mapped_column(
         String(20),
         nullable=False,
-        unique=True,
     )
 
     name: Mapped[str | None] = mapped_column(
@@ -64,7 +72,6 @@ class User(Base):
         server_default="false",
     )
 
-    # Contact-flow specific fields (Week 1-2 MVP)
     free_contacts_remaining: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
@@ -112,6 +119,20 @@ class User(Base):
         default=lambda: datetime.now(timezone.utc),
         server_default=func.now(),
         onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    # -----------------------------------------------------------------------
+    # Relationships
+    # -----------------------------------------------------------------------
+
+    # One-to-many: a user may own multiple provider listings.
+    # noload: never auto-fetch listings when a User is loaded.
+    # Auth middleware fetches User on every request; pulling listings there
+    # would be wasteful. Load explicitly only in listing-specific endpoints.
+    provider_listings: Mapped[list[ProviderListing]] = relationship(
+        "ProviderListing",
+        back_populates="user",
+        lazy="noload",
     )
 
     def __repr__(self) -> str:

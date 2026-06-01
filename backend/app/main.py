@@ -3,7 +3,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth, health
+from app.api import auth, health, provider_listings
 from app.core.config import settings
 from app.db.init_db import create_tables
 from app.db.session import engine
@@ -19,7 +19,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.APP_NAME,
         version=settings.APP_VERSION,
-        description="KaamWala AI — backend API (Week 1-2 MVP: Core Auth & Contact Flow)",
+        description="KaamWala AI — backend API (Phase 1A: Auth + Provider Listings)",
         docs_url="/docs",
         redoc_url="/redoc",
         openapi_url="/openapi.json",
@@ -41,6 +41,7 @@ def create_app() -> FastAPI:
     # ---------------------------------------------------------------------------
     app.include_router(health.router)
     app.include_router(auth.router, prefix="/api/v1")
+    app.include_router(provider_listings.router, prefix="/api/v1")
 
     # ---------------------------------------------------------------------------
     # Startup / shutdown lifecycle
