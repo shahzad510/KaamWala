@@ -21,6 +21,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 
 if TYPE_CHECKING:
+    from app.models.job_request import JobRequest
     from app.models.provider_listing import ProviderListing
 
 
@@ -132,6 +133,15 @@ class User(Base):
     provider_listings: Mapped[list[ProviderListing]] = relationship(
         "ProviderListing",
         back_populates="user",
+        lazy="noload",
+    )
+
+    # One-to-many: a user (as customer) may post multiple job requests.
+    # noload: same rationale as provider_listings — never load on auth paths.
+    job_requests: Mapped[list[JobRequest]] = relationship(
+        "JobRequest",
+        foreign_keys="JobRequest.customer_id",
+        back_populates="customer",
         lazy="noload",
     )
 
