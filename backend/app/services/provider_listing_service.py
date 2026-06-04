@@ -28,7 +28,15 @@ logger = logging.getLogger(__name__)
 
 
 def _compute_profile_completion(listing: ProviderListing) -> int:
-    """Return a 0–100 integer representing profile completeness."""
+    """
+    Return a 0–100 integer representing how complete a listing is.
+
+    Each of the 8 scored fields contributes an equal 12.5 points.
+    The result is rounded to the nearest integer.  This function is
+    called after every create and update so the stored value stays current.
+    Adding or removing scored fields here automatically affects the
+    percentage displayed to providers.
+    """
     scored_fields = [
         bool(listing.title),
         bool(listing.description),
@@ -51,6 +59,7 @@ def _compute_profile_completion(listing: ProviderListing) -> int:
 async def get_listing_by_id(
     db: AsyncSession, listing_id: uuid.UUID
 ) -> ProviderListing | None:
+    """Return a single ProviderListing by PK, or None if not found."""
     result = await db.execute(
         select(ProviderListing).where(ProviderListing.id == listing_id)
     )
@@ -60,6 +69,7 @@ async def get_listing_by_id(
 async def get_listings_by_user_id(
     db: AsyncSession, user_id: uuid.UUID
 ) -> list[ProviderListing]:
+    """Return all listings owned by a user, ordered newest first."""
     result = await db.execute(
         select(ProviderListing)
         .where(ProviderListing.user_id == user_id)
@@ -102,7 +112,14 @@ async def list_listings(
     city: str | None,
     is_active: bool,
 ) -> PaginatedListingResponse:
-    """Return a paginated, optionally filtered list of active provider listings."""
+    """
+    Return a paginated, optionally filtered list of provider listings.
+
+    Filters are additive (AND logic).  City comparison is case-insensitive
+    via func.lower so "karachi" and "Karachi" return the same results.
+    A separate COUNT query is issued first so the total can be returned
+    alongside the page data without a second round-trip to the client.
+    """
     base_query = select(ProviderListing).where(ProviderListing.is_active == is_active)
 
     if service_category:
@@ -110,6 +127,8 @@ async def list_listings(
             ProviderListing.service_category == service_category
         )
     if city:
+        # Case-insensitive match; city is stored with .title() capitalisation
+        # but defensive lowercasing here avoids mismatches from older data.
         base_query = base_query.where(
             func.lower(ProviderListing.city) == city.lower()
         )
@@ -176,12 +195,16 @@ async def update_listing(
             detail="Provider listing not found.",
         )
 
+    # Ownership check: compare UUIDs, not ORM objects, to avoid accidental
+    # identity comparisons that could pass even for different users.
     if listing.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to update this listing.",
         )
 
+    # exclude_unset=True applies PATCH semantics: only fields the caller
+    # explicitly included in the payload are written to the model.
     update_data = payload.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(listing, field, value)

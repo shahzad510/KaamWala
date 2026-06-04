@@ -15,11 +15,20 @@ from dataclasses import dataclass
 logger = logging.getLogger(__name__)
 
 OTP_LENGTH = 4
-OTP_TTL_SECONDS = 300  # 5 minutes
+# Five minutes strikes the balance between usability and security for a
+# phone-based verification flow.  Shorten for higher-security contexts.
+OTP_TTL_SECONDS = 300
 
 
 @dataclass
 class OTPRecord:
+    """
+    Holds a single pending OTP for one phone number.
+
+    Instances live in ``_otp_store`` until either the code is verified
+    (consumed immediately) or the TTL expires (evicted lazily on next lookup).
+    """
+
     code: str
     expires_at: datetime
 

@@ -24,11 +24,13 @@ logger = logging.getLogger(__name__)
 
 
 async def get_user_by_phone(db: AsyncSession, phone: str) -> User | None:
+    """Look up a user by their normalised E.164 phone number."""
     result = await db.execute(select(User).where(User.phone == phone))
     return result.scalar_one_or_none()
 
 
 async def get_user_by_id(db: AsyncSession, user_id: uuid.UUID) -> User | None:
+    """Look up a user by their UUID primary key."""
     result = await db.execute(select(User).where(User.id == user_id))
     return result.scalar_one_or_none()
 
@@ -47,6 +49,7 @@ async def register_user(db: AsyncSession, payload: UserCreate) -> dict:
 
     if existing and existing.is_phone_verified:
         # User already fully registered — still send a fresh OTP so they can log in.
+        # We don't block re-registration: it doubles as the "login" flow.
         logger.info("Existing verified user requesting OTP: %s", payload.phone)
     elif existing is None:
         user = User(

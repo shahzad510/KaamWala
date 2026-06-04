@@ -27,6 +27,8 @@ logger = logging.getLogger(__name__)
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+# Jobs in a terminal state are immutable: no updates and no re-closing allowed.
+# Using a set for O(1) membership testing.
 _TERMINAL_STATUSES = {JobStatus.cancelled, JobStatus.completed}
 
 
@@ -121,8 +123,12 @@ async def browse_jobs(
 ) -> PaginatedJobRequestResponse:
     """
     Return a paginated list of open job requests with optional filters.
-    Only jobs with job_status = open are visible on the public browse feed.
+
+    Only ``open`` jobs appear on the public browse feed — assigned, completed,
+    and cancelled jobs are hidden from providers searching for work.
+    Filters are additive (AND logic); city comparison is case-insensitive.
     """
+    # Hard filter: only surface jobs that are still available for providers.
     base_query = select(JobRequest).where(JobRequest.job_status == JobStatus.open)
 
     if city:
@@ -165,7 +171,13 @@ async def update_job(
     payload: JobRequestUpdate,
     current_user: User,
 ) -> JobRequestResponse:
-    """Update a job request. Only the owner (customer) may do this."""
+    """
+    Update a job request's content fields.
+
+    Ownership and terminal-state checks are enforced before any writes:
+    - Only the posting customer may edit their own job (403 otherwise).
+    - Jobs in a terminal state (cancelled/completed) are frozen (409).
+    """
     job = await _get_job_or_404(db, job_id)
     _assert_owner(job, current_user)
 
@@ -175,6 +187,7 @@ async def update_job(
             detail=f"Cannot update a job that is already {job.job_status.value}.",
         )
 
+    # exclude_unset=True applies PATCH semantics: untouched fields are preserved.
     update_data = payload.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(job, field, value)

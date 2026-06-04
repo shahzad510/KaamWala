@@ -1,3 +1,18 @@
+"""
+Job request routes.
+
+CRUD and lifecycle endpoints for JobRequest resources:
+  POST  /job-requests             — post a new job (auth required)
+  GET   /job-requests/me          — list caller's own jobs (auth)
+  GET   /job-requests             — public paginated browse (open jobs only)
+  GET   /job-requests/{job_id}    — public single job detail
+  PUT   /job-requests/{job_id}    — update own job (owner only)
+  POST  /job-requests/{job_id}/close — cancel a job (owner only)
+
+``/me`` is declared before ``/{job_id}`` to prevent FastAPI from treating
+the literal string "me" as a UUID path parameter.
+"""
+
 from typing import Annotated
 from uuid import UUID
 

@@ -1,3 +1,15 @@
+"""
+Health check routes.
+
+Two endpoints are provided for different monitoring layers:
+  GET /health     — simple liveness probe (no DB dependency).
+  GET /health/db  — deep ping that includes a DB connectivity check.
+
+Load balancers and container orchestrators can use ``/health`` for fast
+liveness checks.  Use ``/health/db`` for readiness checks that require
+the database to be reachable before traffic is routed to the instance.
+"""
+
 from datetime import datetime, timezone
 
 from fastapi import APIRouter
@@ -11,6 +23,7 @@ router = APIRouter(tags=["Health"])
 
 @router.get("/health", summary="Basic liveness check")
 async def health() -> dict:
+    """Return application name, version, and current UTC timestamp."""
     return {
         "status": "ok",
         "app": settings.APP_NAME,

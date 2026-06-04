@@ -1,3 +1,17 @@
+"""
+Provider listing routes.
+
+CRUD endpoints for ProviderListing resources:
+  POST   /provider-listings            — create a listing (auth required)
+  GET    /provider-listings/me         — list caller's own listings (auth)
+  GET    /provider-listings            — public paginated browse
+  GET    /provider-listings/{id}       — public single listing detail
+  PUT    /provider-listings/{id}       — update own listing (owner only)
+
+``/me`` is declared before ``/{listing_id}`` to prevent FastAPI from
+interpreting the literal string "me" as a UUID path parameter.
+"""
+
 from typing import Annotated
 
 from fastapi import APIRouter, Query, status

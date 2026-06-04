@@ -1,3 +1,15 @@
+"""
+Job request Pydantic schemas.
+
+``JobRequestCreate`` and ``JobRequestUpdate`` are the only entry points for
+customer-supplied data.  System-managed fields (``job_status``,
+``assigned_provider_id``, all counters) are deliberately absent to prevent
+clients from manipulating platform state directly.
+
+Budget cross-field validation (max >= min) is enforced at schema level via
+``@model_validator`` so the service layer never receives an incoherent range.
+"""
+
 import uuid
 from datetime import datetime
 
@@ -13,12 +25,19 @@ from app.models.provider_listing import ServiceCategory
 
 
 class JobCustomerSummary(BaseModel):
+    """
+    Minimal customer info embedded in every job response.
+
+    Phone is currently always returned.  When the contact-unlock system is
+    implemented, visibility will be gated behind a provider payment/credit,
+    and this class will need a conditional masking mechanism similar to
+    ``ListingOwnerSummary``.
+    """
+
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
     name: str | None
-    # Phone is always visible for now.
-    # A future unlock system will gate visibility behind payment/credits.
     phone: str | None
 
 
@@ -28,6 +47,8 @@ class JobCustomerSummary(BaseModel):
 
 
 class JobRequestCreate(BaseModel):
+    """Fields a customer submits when posting a new job request."""
+
     title: str = Field(
         ...,
         min_length=5,
@@ -136,6 +157,8 @@ class JobRequestUpdate(BaseModel):
 
 
 class JobRequestResponse(BaseModel):
+    """Full job request representation returned to API consumers."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
@@ -189,6 +212,13 @@ class JobRequestResponse(BaseModel):
 
 
 class PaginatedJobRequestResponse(BaseModel):
+    """
+    Paginated envelope for job browse/list responses.
+
+    ``total`` reflects the full result count before pagination so clients
+    can calculate page counts without issuing a separate count request.
+    """
+
     total: int
     page: int
     page_size: int

@@ -1,3 +1,15 @@
+"""
+Provider listing model.
+
+A ``ProviderListing`` is a public-facing profile card that a provider
+publishes to advertise their services.  One user may own many listings
+(e.g. an electrician who also offers AC repair under a separate listing).
+
+``ServiceCategory`` is defined here and intentionally reused by
+``job_request.py`` to keep the category vocabulary consistent across
+the supply and demand sides without duplication.
+"""
+
 from __future__ import annotations
 
 import enum
@@ -26,6 +38,14 @@ if TYPE_CHECKING:
 
 
 class ServiceCategory(str, enum.Enum):
+    """
+    Canonical list of service trades supported on the platform.
+
+    Used by both provider listings (supply) and job requests (demand) so
+    that the two sides can be matched by category.  Add new values here
+    and run a migration to extend the PostgreSQL enum type.
+    """
+
     electrician = "electrician"
     plumber = "plumber"
     carpenter = "carpenter"
@@ -44,6 +64,17 @@ class ServiceCategory(str, enum.Enum):
 
 
 class ProviderListing(Base):
+    """
+    A provider's public service advertisement.
+
+    System-managed counters (``completed_jobs_count``, ``referral_count``,
+    ``trust_score``, ``views_count``) are incremented by platform events and
+    must never be accepted from API client input.
+
+    ``profile_completion_percentage`` is recomputed on every create/update
+    by the service layer, not by the client.
+    """
+
     __tablename__ = "provider_listings"
 
     __table_args__ = (
@@ -157,6 +188,8 @@ class ProviderListing(Base):
         comment="Auto-computed on writes (0–100)",
     )
 
+    # Credits awarded to this provider through referrals or promotions.
+    # Consumed by the contact-unlock feature in a future phase.
     free_unlock_credits: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
@@ -164,6 +197,8 @@ class ProviderListing(Base):
         server_default="0",
     )
 
+    # Providers can opt out of the referral network; setting this False
+    # hides the listing from referral-driven discovery surfaces.
     can_receive_referrals: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
@@ -171,6 +206,8 @@ class ProviderListing(Base):
         server_default="true",
     )
 
+    # Set to True by admins after manual verification (ID, trade certificate,
+    # etc.).  Verified listings receive a badge and ranking boost.
     is_verified: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,

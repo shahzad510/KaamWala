@@ -1,3 +1,16 @@
+"""
+Job request model.
+
+A ``JobRequest`` represents a customer's demand for a service.  It is the
+counterpart to ``ProviderListing`` on the supply side.  Providers browse
+open jobs and decide whether to respond; the contact-unlock system (future
+phase) gates access to the customer's phone number behind a payment.
+
+``JobStatus`` drives the lifecycle: open → assigned → completed.
+Cancellation is a terminal state that can be reached from any non-terminal
+status by the customer.
+"""
+
 from __future__ import annotations
 
 import enum
@@ -29,6 +42,13 @@ if TYPE_CHECKING:
 
 
 class Urgency(str, enum.Enum):
+    """
+    Customer's self-reported urgency for the job.
+
+    Used for browse filtering and, in future phases, for surfacing
+    high-urgency jobs more prominently to nearby providers.
+    """
+
     low = "low"
     medium = "medium"
     high = "high"
@@ -36,6 +56,18 @@ class Urgency(str, enum.Enum):
 
 
 class JobStatus(str, enum.Enum):
+    """
+    Lifecycle state machine for a job request.
+
+    Allowed transitions:
+      open → assigned  (when a provider is linked, future phase)
+      open / assigned → cancelled  (customer closes the job)
+      assigned → completed  (provider confirms, future phase)
+
+    ``cancelled`` and ``completed`` are terminal — no further transitions
+    are permitted.  The service layer enforces this via ``_TERMINAL_STATUSES``.
+    """
+
     open = "open"
     assigned = "assigned"
     completed = "completed"
@@ -43,6 +75,19 @@ class JobStatus(str, enum.Enum):
 
 
 class JobRequest(Base):
+    """
+    A customer's request for a skilled-trade service.
+
+    Lifecycle and ownership rules enforced by the service layer:
+      - Only the posting customer may update or close a job.
+      - Updates are rejected once the job reaches a terminal status.
+      - ``contact_unlocked_count`` is incremented by the unlock flow, not
+        by direct API writes.
+      - ``assigned_provider_id`` is populated by the assignment flow
+        (future phase); its FK uses SET NULL so provider deletion does
+        not cascade-delete the job record.
+    """
+
     __tablename__ = "job_requests"
 
     __table_args__ = (

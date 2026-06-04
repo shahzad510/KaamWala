@@ -1,3 +1,12 @@
+"""
+User model.
+
+The ``users`` table is the identity anchor for the entire platform.
+A single row can represent a customer, a provider, or both — controlled
+by the ``user_type`` field.  Phone-based OTP is the only authentication
+mechanism; no passwords are stored.
+"""
+
 from __future__ import annotations
 
 import enum
@@ -26,12 +35,31 @@ if TYPE_CHECKING:
 
 
 class UserType(str, enum.Enum):
+    """
+    Determines which parts of the platform a user can access.
+
+    ``both`` is reserved for users who switch roles mid-journey (e.g. a
+    provider who also posts jobs).  Default is ``customer`` at registration
+    and can be upgraded later without creating a second account.
+    """
+
     customer = "customer"
     provider = "provider"
     both = "both"
 
 
 class User(Base):
+    """
+    Core identity record for every registered person on the platform.
+
+    Registration flow: phone submitted → OTP sent → OTP verified →
+    ``is_phone_verified`` flipped to True → JWT issued.
+
+    Contact-flow fields (``free_contacts_remaining``, ``has_used_pay_later``,
+    ``outstanding_debt``) are populated by the contact-unlock feature and
+    should not be written by client requests.
+    """
+
     __tablename__ = "users"
 
     __table_args__ = (
@@ -73,6 +101,8 @@ class User(Base):
         server_default="false",
     )
 
+    # Every new user receives 3 free contact unlocks.  Once exhausted,
+    # they must pay upfront or use the pay-later option.
     free_contacts_remaining: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
@@ -80,6 +110,8 @@ class User(Base):
         server_default="3",
     )
 
+    # Tracks whether the user has ever used the pay-later option.
+    # Used to gate eligibility: pay-later is a one-time privilege per user.
     has_used_pay_later: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
@@ -95,11 +127,15 @@ class User(Base):
         comment="Outstanding debt in PKR paisa (smallest unit)",
     )
 
+    # Timestamp of the most recent debt charge.  Used by the collection
+    # flow to calculate how long a debt has been outstanding.
     debt_incurred_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
 
+    # Soft-delete flag.  Setting this to False blocks authentication without
+    # removing the row, preserving referential integrity with jobs and listings.
     is_active: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,

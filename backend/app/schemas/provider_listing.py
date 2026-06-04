@@ -1,3 +1,15 @@
+"""
+Provider listing Pydantic schemas.
+
+Create / Update schemas accept only the fields that a provider is allowed
+to write.  System-managed counters (views, trust score, etc.) are absent
+from both input schemas and are populated exclusively by platform events.
+
+``ProviderListingResponse.from_orm_with_owner`` is the canonical way to
+build a response object from an ORM instance; it handles the conditional
+phone-masking logic so routes do not need to replicate it.
+"""
+
 import uuid
 from datetime import datetime
 
@@ -12,6 +24,13 @@ from app.models.provider_listing import ServiceCategory
 
 
 class ProviderListingCreate(BaseModel):
+    """
+    Fields a provider submits when publishing a new listing.
+
+    ``profile_completion_percentage`` is not accepted here — it is computed
+    server-side by the service layer after the listing is saved.
+    """
+
     title: str = Field(
         ...,
         min_length=5,
@@ -101,11 +120,18 @@ class ProviderListingUpdate(BaseModel):
 
 
 class ListingOwnerSummary(BaseModel):
+    """
+    Minimal owner info embedded in every listing response.
+
+    ``phone`` is ``None`` when the provider has set ``phone_visible=False``,
+    masking their number until a contact-unlock happens (future phase).
+    """
+
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
     name: str | None
-    phone: str | None  # conditionally exposed based on phone_visible
+    phone: str | None  # None when phone_visible=False on the parent listing
 
 
 # ---------------------------------------------------------------------------
@@ -114,6 +140,8 @@ class ListingOwnerSummary(BaseModel):
 
 
 class ProviderListingResponse(BaseModel):
+    """Full listing representation returned to API consumers."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
@@ -176,6 +204,13 @@ class ProviderListingResponse(BaseModel):
 
 
 class PaginatedListingResponse(BaseModel):
+    """
+    Paginated envelope for listing browse responses.
+
+    ``total`` reflects the full result count before pagination so clients
+    can calculate page counts without issuing a separate count request.
+    """
+
     total: int
     page: int
     page_size: int

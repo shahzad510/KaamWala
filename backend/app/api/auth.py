@@ -1,3 +1,15 @@
+"""
+Authentication routes.
+
+Three endpoints cover the full phone-OTP authentication lifecycle:
+  POST /auth/register    — create account and dispatch OTP
+  POST /auth/verify-otp  — validate OTP and receive JWT
+  GET  /auth/me          — return the caller's own profile (protected)
+
+All business logic lives in ``services/auth_service.py``; these handlers
+are intentionally thin adapters.
+"""
+
 from fastapi import APIRouter, status
 
 from app.core.dependencies import CurrentUser, DBSession
