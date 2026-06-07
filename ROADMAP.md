@@ -23,7 +23,7 @@ See [PROJECT_STATUS.md](./PROJECT_STATUS.md) for full endpoint and schema detail
 
 ---
 
-## Phase 2B — Provider Interest System 🔜
+## Phase 2B — Provider Interest System ✅
 
 **Goal:** Allow providers to express interest in an open job so customers can see who is available before committing to a contact unlock.
 

@@ -38,7 +38,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.APP_NAME,
         version=settings.APP_VERSION,
-        description="KaamWala AI — backend API (Phase 2A: Auth + Provider Listings + Job Requests)",
+        description="KaamWala AI — backend API (Phase 2B: Auth + Provider Listings + Job Requests + Provider Interest System)",
         docs_url="/docs",
         redoc_url="/redoc",
         openapi_url="/openapi.json",

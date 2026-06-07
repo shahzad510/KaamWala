@@ -38,6 +38,7 @@ from app.db.base import Base
 from app.models.provider_listing import ServiceCategory  # noqa: E402
 
 if TYPE_CHECKING:
+    from app.models.job_interest import JobInterest
     from app.models.user import User
 
 
@@ -257,6 +258,16 @@ class JobRequest(Base):
         foreign_keys=[customer_id],
         back_populates="job_requests",
         lazy="selectin",
+    )
+
+    # One-to-many: a job can have many interested provider listings.
+    # noload: interests are only needed on the dedicated interest endpoints,
+    # not on every job fetch.  Load explicitly there.
+    interests: Mapped[list[JobInterest]] = relationship(
+        "JobInterest",
+        back_populates="job",
+        lazy="noload",
+        cascade="all, delete-orphan",
     )
 
     def __repr__(self) -> str:

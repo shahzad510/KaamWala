@@ -12,6 +12,7 @@
 | MVP   | Auth Foundation | ✅ Complete |
 | 1A    | Provider Listings | ✅ Complete |
 | 2A    | Job Requests | ✅ Complete |
+| 2B    | Provider Interest System | ✅ Complete |
 
 ---
 
@@ -54,6 +55,14 @@ All versioned endpoints are mounted under `/api/v1`.
 | `GET`  | `/job-requests/{job_id}` | None | Single job detail; increments `views_count` |
 | `PUT`  | `/job-requests/{job_id}` | Bearer | Update job fields (owner only, PATCH semantics, non-terminal only) |
 | `POST` | `/job-requests/{job_id}/close` | Bearer | Cancel a job (owner only, non-terminal only) |
+
+### Job Interests (`/api/v1/job-requests/{job_id}/interest[s]`)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `POST` | `/job-requests/{job_id}/interest` | Bearer | Provider expresses interest; body: `provider_listing_id`, optional `message` + `quoted_price` |
+| `GET`  | `/job-requests/{job_id}/interests` | Bearer | Customer views all interested providers (owner only); phone not included |
+| `DELETE` | `/job-requests/{job_id}/interest?listing_id={uuid}` | Bearer | Provider withdraws their listing's interest; returns 204 |
 
 ---
 
@@ -142,6 +151,23 @@ All versioned endpoints are mounted under `/api/v1`.
 
 ---
 
+### `job_interests`
+
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| `id` | UUID | No | PK, auto-generated |
+| `job_id` | UUID | No | FK → `job_requests.id` ON DELETE CASCADE |
+| `provider_listing_id` | UUID | No | FK → `provider_listings.id` ON DELETE CASCADE |
+| `message` | TEXT | Yes | Optional pitch from the provider (max 1 000 chars enforced at schema level) |
+| `quoted_price` | INTEGER | Yes | Provider's indicative price for this job in PKR |
+| `created_at` | TIMESTAMPTZ | No | Server default: `now()` |
+
+**Unique constraint:** `uq_job_interests_job_listing` on `(job_id, provider_listing_id)` — one interest per listing per job.
+
+**Indexes:** `ix_job_interests_job_id`, `ix_job_interests_provider_listing_id`, `ix_job_interests_created_at`
+
+---
+
 ## Current Business Rules
 
 ### Authentication
@@ -172,6 +198,19 @@ All versioned endpoints are mounted under `/api/v1`.
 
 ---
 
+### Provider Interest (Phase 2B)
+- Phone must be verified before expressing interest.
+- The `provider_listing_id` in the request body must belong to the authenticated caller; non-owners receive `403`.
+- The listing must be active (`is_active = true`); inactive listings receive `403`.
+- A user cannot express interest in their own job request (`job.customer_id == listing.user_id`) — returns `409 Conflict`.
+- Interest may only be expressed on `open` jobs; other statuses return `409 Conflict`.
+- Duplicate `(job_id, provider_listing_id)` pairs return `409 Conflict` (enforced at both service and database level via unique constraint).
+- Only the job's posting customer may call `GET /interests`; all other callers receive `403`.
+- `DELETE /interest?listing_id=<uuid>` withdraws the interest unconditionally (no job-status restriction). The job must exist (`404` for bad IDs) and the listing must belong to the caller (`403`).
+- Provider phone numbers are **never** returned in interest responses — they remain gated behind the contact-unlock system (Phase 4).
+
+---
+
 ## Known Limitations (MVP)
 
 - OTP is stored in process memory — does not survive restarts and does not work in multi-process deployments.
@@ -181,3 +220,4 @@ All versioned endpoints are mounted under `/api/v1`.
 - No admin endpoints exist.
 - `assigned_provider_id` column exists but no assignment logic is implemented.
 - `job_status` values `assigned` and `completed` exist in the database ENUM but are unreachable by current API calls. No endpoint sets either status.
+- No background scheduler exists yet; stale-job expiration is planned for Phase 2C.

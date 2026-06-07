@@ -34,6 +34,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 
 if TYPE_CHECKING:
+    from app.models.job_interest import JobInterest
     from app.models.user import User
 
 
@@ -254,6 +255,15 @@ class ProviderListing(Base):
         "User",
         back_populates="provider_listings",
         lazy="selectin",
+    )
+
+    # One-to-many: a listing can express interest in many jobs.
+    # noload: interests are only fetched on the dedicated interest endpoints.
+    interests: Mapped[list[JobInterest]] = relationship(
+        "JobInterest",
+        back_populates="provider_listing",
+        lazy="noload",
+        cascade="all, delete-orphan",
     )
 
     def __repr__(self) -> str:

@@ -60,7 +60,7 @@ backend/
 │   │   ├── auth.py
 │   │   ├── health.py
 │   │   ├── provider_listings.py
-│   │   └── job_requests.py
+│   │   └── job_requests.py   # Also hosts /{job_id}/interest[s] routes
 │   ├── core/                 # Cross-cutting infrastructure
 │   │   ├── config.py         # pydantic-settings singleton
 │   │   ├── security.py       # JWT create / verify / extract
@@ -72,15 +72,18 @@ backend/
 │   ├── models/               # SQLAlchemy ORM models
 │   │   ├── user.py
 │   │   ├── provider_listing.py
-│   │   └── job_request.py
+│   │   ├── job_request.py
+│   │   └── job_interest.py   # Phase 2B — provider interest bridge table
 │   ├── schemas/              # Pydantic request / response schemas
 │   │   ├── user.py
 │   │   ├── provider_listing.py
-│   │   └── job_request.py
+│   │   ├── job_request.py
+│   │   └── job_interest.py   # Phase 2B — JobInterestCreate / Response
 │   ├── services/             # Business logic layer
 │   │   ├── auth_service.py
 │   │   ├── provider_listing_service.py
-│   │   └── job_request_service.py
+│   │   ├── job_request_service.py
+│   │   └── job_interest_service.py  # Phase 2B — express / list / withdraw
 │   ├── utils/
 │   │   └── otp.py            # OTP generate / store / verify (in-memory stub)
 │   └── main.py               # App factory, middleware, router registration
@@ -105,10 +108,11 @@ No business logic, no direct ORM queries, no raw SQL.
 ### Router registration (`main.py`)
 
 ```
-/                         → health.router          (no prefix)
-/api/v1/auth/*            → auth.router
-/api/v1/provider-listings/* → provider_listings.router
-/api/v1/job-requests/*    → job_requests.router
+/                              → health.router              (no prefix)
+/api/v1/auth/*                 → auth.router
+/api/v1/provider-listings/*    → provider_listings.router
+/api/v1/job-requests/*         → job_requests.router
+  including: /{job_id}/interest[s]  (Phase 2B interest sub-routes)
 ```
 
 ### Route ordering
@@ -189,6 +193,14 @@ who calls it receives a fresh OTP, which they verify to get a new token.
 | `update_job` | Ownership + terminal-state check, PATCH apply |
 | `close_job` | Ownership + terminal-state check, set status to `cancelled` |
 
+### `job_interest_service.py` (Phase 2B)
+
+| Function | Responsibility |
+|----------|----------------|
+| `express_interest` | Guard phone verification + listing ownership + open-job check + duplicate check, create interest |
+| `list_interests` | Job-ownership check, return all interests with embedded provider summary |
+| `withdraw_interest` | Listing-ownership check, delete interest record |
+
 `_TERMINAL_STATUSES = {cancelled, completed}` guards both `update_job` and
 `close_job`. Attempts to modify a terminal job return `409 Conflict`.
 
@@ -240,6 +252,17 @@ Advertises a provider's service. Fields are grouped by concern:
 
 Relationship (`lazy="selectin"` — always loaded with the listing):
 - `user` → `User` (many-to-one)
+
+### `JobInterest` (`job_interests`) — Phase 2B
+
+Bridge table between a `JobRequest` and a `ProviderListing`.  Fields:
+
+- **Core:** `job_id` (FK CASCADE), `provider_listing_id` (FK CASCADE), `message`, `quoted_price`
+- **Unique constraint:** `(job_id, provider_listing_id)` — one interest per listing per job.
+
+Relationships:
+- `job` → `JobRequest` (`lazy="noload"`)
+- `provider_listing` → `ProviderListing` (`lazy="selectin"` — loads listing + user eagerly for response embedding)
 
 ### `JobRequest` (`job_requests`)
 
@@ -314,15 +337,24 @@ users
  │                                                                        │
  │  provider_listings                                                     │
  │   └── user_id → users.id  (ON DELETE CASCADE)                         │
- │                                                                        │
- │  job_requests                                                          │
- │   ├── customer_id → users.id  (ON DELETE CASCADE)                     │
- │   └── assigned_provider_id → users.id  (ON DELETE SET NULL)  ─────────┘
+ │        └── id ─────────────────────────────────────────────────────┐  │
+ │                                                                     │  │
+ │  job_requests                                                       │  │
+ │   ├── customer_id → users.id  (ON DELETE CASCADE)  ────────────────┼──┘
+ │   ├── assigned_provider_id → users.id  (ON DELETE SET NULL)        │
+ │   └── id ───────────────────────────────────────────────────────┐  │
+ │                                                                  │  │
+ │  job_interests  (Phase 2B)                                       │  │
+ │   ├── job_id → job_requests.id  (ON DELETE CASCADE)  ───────────┘  │
+ │   └── provider_listing_id → provider_listings.id  (ON DELETE CASCADE)┘
+ │        UNIQUE (job_id, provider_listing_id)
 ```
 
 - **CASCADE on `provider_listings.user_id`** — deleting a user removes all their listings.
 - **CASCADE on `job_requests.customer_id`** — deleting a customer removes all their jobs.
 - **SET NULL on `job_requests.assigned_provider_id`** — deleting a provider user nullifies the assignment without deleting the job record.
+- **CASCADE on `job_interests.job_id`** — deleting a job removes all its interest records.
+- **CASCADE on `job_interests.provider_listing_id`** — deleting a listing removes all its interest records.
 
 ---
 
